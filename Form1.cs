@@ -19,28 +19,23 @@ namespace Compression_Vault
         private readonly ICompressionItemManager _itemManager;
         private readonly IItemControlFactory _controlFactory;
         private readonly ICompressionService _compressionService;
+        private readonly DecompressionManager _decompressionManager;
         private FlowLayoutPanel _flowPanelFiles;
         private CancellationTokenSource _cancellationTokenSource;
         private System.Windows.Forms.Timer _statusTimer;
         private CompressionResult _lastCompressionResult;
+        private DecompressionResult _lastDecompressionResult;
 
         public Form1()
         {
             InitializeComponent();
-            tabControl.SelectedIndexChanged += (s, e) =>
-            {
-                if (tabControl.SelectedTab == tabExtract)
-                    LoadCompressedArchives();
-            };
-
-           
-
 
             _fileSelectionService = new FileSelectionService();
             _summaryService = new CompressionSummaryService();
             _itemManager = new CompressionItemManager();
             _controlFactory = new ItemControlFactory();
             _compressionService = new CompressionService();
+            _decompressionManager = new DecompressionManager();
 
             _statusTimer = new System.Windows.Forms.Timer();
             _statusTimer.Interval = 5000;
@@ -79,6 +74,25 @@ namespace Compression_Vault
             btnStart.Click += BtnStart_Click;
             _itemManager.ItemsChanged += OnItemsChanged;
             togglePassword.CheckedChanged += TogglePassword_CheckedChanged;
+            
+            // Decompression events
+            btnExtract.Click += BtnExtract_Click;
+            btnBrowseArchive.Click += BtnBrowseArchive_Click;
+            btnBrowseExtractPath.Click += BtnBrowseExtractPath_Click;
+            
+            // Tab control events
+            tabControl.SelectedIndexChanged += TabControl_SelectedIndexChanged;
+            
+            // ListView events
+            listViewArchive.SelectedIndexChanged += ListViewArchive_SelectedIndexChanged;
+        }
+
+        private void TabControl_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (tabControl.SelectedTab == tabExtract)
+            {
+                LoadCompressedArchives();
+            }
         }
 
         private void BtnAddFiles_Click(object sender, EventArgs e)
@@ -128,7 +142,7 @@ namespace Compression_Vault
             string staticFolder = Path.Combine(Application.StartupPath, "CompressedFiles");
             Directory.CreateDirectory(staticFolder);
 
-            string fileName = $"Archive_{DateTime.Now:yyyyMMdd_HHmmss}.cva";
+            string fileName = string.Format("Archive_{0}.cva", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
             string outputPath = Path.Combine(staticFolder, fileName);
 
             await PerformCompression(outputPath);
@@ -174,7 +188,7 @@ namespace Compression_Vault
 
                     _lastCompressionResult = result;
                     UpdateCompressionStats(result);
-                    lblStatus.Text = $"Compression completed successfully! Original: {FormatFileSize(result.OriginalSize)}, Compressed: {FormatFileSize(result.CompressedSize)}, Ratio: {ratio:P2}, Time: {result.Duration:mm\\:ss}";
+                    lblStatus.Text = string.Format("Compression completed successfully! Original: {0}, Compressed: {1}, Ratio: {2:P2}, Time: {3:mm\\:ss}", FormatFileSize(result.OriginalSize), FormatFileSize(result.CompressedSize), ratio, result.Duration);
                     _statusTimer.Start();
                     LoadCompressedArchives(); // Refresh list after new file saved
 
@@ -182,7 +196,7 @@ namespace Compression_Vault
 
                 else
                 {
-                    MessageBox.Show($"Compression failed: {result.ErrorMessage}", "Compression Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(string.Format("Compression failed: {0}", result.ErrorMessage), "Compression Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch (OperationCanceledException)
@@ -191,7 +205,7 @@ namespace Compression_Vault
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"An error occurred: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(string.Format("An error occurred: {0}", ex.Message), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -228,10 +242,10 @@ namespace Compression_Vault
 
             if (result != null)
             {
-                lblOriginalSize.Text = $"Original Size: {FormatFileSize(result.OriginalSize)}";
-                lblCompressedSize.Text = $"Compressed Size: {FormatFileSize(result.CompressedSize)}";
-                lblRatio.Text = $"Compression Ratio: {result.CompressionRatio:P2}";
-                lblSaved.Text = $"Space Saved: {FormatFileSize(result.OriginalSize - result.CompressedSize)}";
+                lblOriginalSize.Text = string.Format("Original Size: {0}", FormatFileSize(result.OriginalSize));
+                lblCompressedSize.Text = string.Format("Compressed Size: {0}", FormatFileSize(result.CompressedSize));
+                lblRatio.Text = string.Format("Compression Ratio: {0:P2}", result.CompressionRatio);
+                lblSaved.Text = string.Format("Space Saved: {0}", FormatFileSize(result.OriginalSize - result.CompressedSize));
             }
             else
             {
@@ -287,9 +301,9 @@ namespace Compression_Vault
         {
             var summary = _summaryService.CalculateSummary(_itemManager.Items);
 
-            lblTotalFiles.Text = $"Total Files: {summary.TotalFiles}";
-            lblTotalSize.Text = $"Total Size: {summary.FormattedTotalSize}";
-            lblEstimated.Text = $"Estimated Compression: ~{summary.FormattedEstimatedSize}";
+            lblTotalFiles.Text = string.Format("Total Files: {0}", summary.TotalFiles);
+            lblTotalSize.Text = string.Format("Total Size: {0}", summary.FormattedTotalSize);
+            lblEstimated.Text = string.Format("Estimated Compression: ~{0}", summary.FormattedEstimatedSize);
         }
 
         private string FormatFileSize(long bytes)
@@ -302,7 +316,7 @@ namespace Compression_Vault
                 order++;
                 len /= 1024;
             }
-            return $"{len:0.##} {sizes[order]}";
+            return string.Format("{0:0.##} {1}", len, sizes[order]);
         }
 
         private double CalculateCompressionRatio(long originalSize, long compressedSize)
@@ -317,18 +331,241 @@ namespace Compression_Vault
             Directory.CreateDirectory(staticFolder);
 
             listViewArchive.Items.Clear();
+            
+            // Add columns if they don't exist
+            if (listViewArchive.Columns.Count == 0)
+            {
+                listViewArchive.Columns.Add("Name", 200);
+                listViewArchive.Columns.Add("Size", 100);
+                listViewArchive.Columns.Add("Created", 150);
+                listViewArchive.Columns.Add("Path", 200);
+            }
 
             var files = Directory.GetFiles(staticFolder, "*.cva");
             foreach (var file in files)
             {
                 FileInfo info = new FileInfo(file);
                 var item = new ListViewItem(info.Name);
-                item.SubItems.Add(info.Length.ToString("N0") + " bytes");
+                item.SubItems.Add(FormatFileSize(info.Length));
                 item.SubItems.Add(info.CreationTime.ToString("g"));
-                item.Tag = file; // optional: store full path
+                item.SubItems.Add(file); // Full path
+                item.Tag = file; // Store full path in tag
                 listViewArchive.Items.Add(item);
             }
         }
+
+        #region Decompression Methods
+
+        private void BtnBrowseArchive_Click(object sender, EventArgs e)
+        {
+            using (var openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.Filter = "Compressed Archives (*.cva)|*.cva|All Files (*.*)|*.*";
+                openFileDialog.Title = "Select Archive to Extract";
+
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    txtArchivePath.Text = openFileDialog.FileName;
+                    LoadArchiveInfo(openFileDialog.FileName);
+                }
+            }
+        }
+
+        private void BtnBrowseExtractPath_Click(object sender, EventArgs e)
+        {
+            using (var folderBrowserDialog = new FolderBrowserDialog())
+            {
+                folderBrowserDialog.Description = "Select Extraction Directory";
+                folderBrowserDialog.ShowNewFolderButton = true;
+
+                if (folderBrowserDialog.ShowDialog() == DialogResult.OK)
+                {
+                    txtExtractPath.Text = folderBrowserDialog.SelectedPath;
+                }
+            }
+        }
+
+        private async void BtnExtract_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(txtArchivePath.Text) || !File.Exists(txtArchivePath.Text))
+            {
+                MessageBox.Show("Please select a valid archive file.", "Invalid Archive", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(txtExtractPath.Text))
+            {
+                MessageBox.Show("Please select an extraction directory.", "No Extraction Path", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            await StartDecompression();
+        }
+
+        private async Task StartDecompression()
+        {
+            try
+            {
+                btnExtract.Text = "Cancel Extraction";
+                btnExtract.Enabled = true;
+                progressBarExtract.Value = 0;
+                progressBarExtract.Style = ProgressBarStyle.Continuous;
+                lblExtractStatus.Text = "Preparing extraction...";
+
+                btnBrowseArchive.Enabled = false;
+                btnBrowseExtractPath.Enabled = false;
+                txtArchivePath.Enabled = false;
+                txtExtractPath.Enabled = false;
+                txtExtractPassword.Enabled = false;
+
+                _cancellationTokenSource = new CancellationTokenSource();
+                string password = string.IsNullOrEmpty(txtExtractPassword.Text) ? null : txtExtractPassword.Text;
+                var progress = new Progress<DecompressionProgress>(UpdateDecompressionProgress);
+
+                var decompressionInfo = new DecompressionInfo
+                {
+                    InputPath = txtArchivePath.Text,
+                    OutputDirectory = txtExtractPath.Text,
+                    Password = password,
+                    AutoDetectAlgorithm = true
+                };
+
+                var result = await _decompressionManager.DecompressAsync(decompressionInfo, progress, _cancellationTokenSource.Token);
+
+                if (result.Success)
+                {
+                    _lastDecompressionResult = result;
+                    UpdateDecompressionStats(result);
+                                    lblExtractStatus.Text = string.Format("Extraction completed successfully! Extracted: {0} files, Time: {1:mm\\:ss}", result.ExtractedFiles.Count, result.Duration);
+                MessageBox.Show(string.Format("Extraction completed successfully!\n\nExtracted {0} files to:\n{1}", result.ExtractedFiles.Count, txtExtractPath.Text), "Extraction Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show(string.Format("Extraction failed: {0}", result.ErrorMessage), "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                MessageBox.Show("Extraction was cancelled.", "Extraction Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(string.Format("An error occurred: {0}", ex.Message), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                ResetDecompressionUI();
+            }
+        }
+
+        private void UpdateDecompressionProgress(DecompressionProgress progress)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action<DecompressionProgress>(UpdateDecompressionProgress), progress);
+                return;
+            }
+
+            int clampedValue = Math.Max(progressBarExtract.Minimum, Math.Min(progressBarExtract.Maximum, (int)progress.Percentage));
+            progressBarExtract.Value = clampedValue;
+            lblExtractStatus.Text = progress.Status;
+        }
+
+        private void UpdateDecompressionStats(DecompressionResult result = null)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action<DecompressionResult>(UpdateDecompressionStats), result);
+                return;
+            }
+
+            if (result != null)
+            {
+                lblExtractedFiles.Text = string.Format("Extracted Files: {0}", result.ExtractedFiles.Count);
+                lblExtractedSize.Text = string.Format("Extracted Size: {0}", FormatFileSize(result.DecompressedSize));
+                lblExtractRatio.Text = string.Format("Decompression Ratio: {0:P2}", result.DecompressionRatio);
+            }
+            else
+            {
+                lblExtractedFiles.Text = "Extracted Files: 0";
+                lblExtractedSize.Text = "Extracted Size: 0 MB";
+                lblExtractRatio.Text = "Decompression Ratio: -";
+            }
+        }
+
+        private void ResetDecompressionUI()
+        {
+            btnExtract.Text = "Extract Archive";
+            btnExtract.Enabled = true;
+            progressBarExtract.Value = 0;
+            progressBarExtract.Style = ProgressBarStyle.Continuous;
+
+            btnBrowseArchive.Enabled = true;
+            btnBrowseExtractPath.Enabled = true;
+            txtArchivePath.Enabled = true;
+            txtExtractPath.Enabled = true;
+            txtExtractPassword.Enabled = true;
+
+            if (!_statusTimer.Enabled)
+                lblExtractStatus.Text = "Ready to extract";
+
+            _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = null;
+        }
+
+        private async void LoadArchiveInfo(string filePath)
+        {
+            try
+            {
+                var fileInfo = await _decompressionManager.GetCompressedFileInfoAsync(filePath);
+                if (fileInfo != null && string.IsNullOrEmpty(fileInfo.ErrorMessage))
+                {
+                                    lblArchiveAlgorithm.Text = string.Format("Algorithm: {0}", fileInfo.Algorithm);
+                lblArchiveSize.Text = string.Format("Archive Size: {0}", FormatFileSize(fileInfo.CompressedSize));
+                lblArchiveItems.Text = string.Format("Items: {0}", fileInfo.ItemCount);
+                lblArchivePassword.Text = string.Format("Password Protected: {0}", fileInfo.HasPassword ? "Yes" : "No");
+                    
+                    // Enable/disable password field
+                    txtExtractPassword.Enabled = fileInfo.HasPassword;
+                    if (!fileInfo.HasPassword)
+                    {
+                        txtExtractPassword.Text = string.Empty;
+                    }
+                }
+                else
+                {
+                    lblArchiveAlgorithm.Text = "Algorithm: Unknown";
+                    lblArchiveSize.Text = "Archive Size: Unknown";
+                    lblArchiveItems.Text = "Items: Unknown";
+                    lblArchivePassword.Text = "Password Protected: Unknown";
+                    txtExtractPassword.Enabled = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                lblArchiveAlgorithm.Text = "Algorithm: Error";
+                lblArchiveSize.Text = "Archive Size: Error";
+                lblArchiveItems.Text = "Items: Error";
+                lblArchivePassword.Text = "Password Protected: Error";
+                txtExtractPassword.Enabled = false;
+            }
+        }
+
+        private void ListViewArchive_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (listViewArchive.SelectedItems.Count > 0)
+            {
+                var selectedItem = listViewArchive.SelectedItems[0];
+                string filePath = selectedItem.Tag as string;
+                if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+                {
+                    txtArchivePath.Text = filePath;
+                    LoadArchiveInfo(filePath);
+                }
+            }
+        }
+
+        #endregion
 
     }
 }

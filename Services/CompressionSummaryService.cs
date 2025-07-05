@@ -35,7 +35,7 @@ namespace Compression_Vault.Services
                 order++;
                 len = len / 1024;
             }
-            return $"{len:0.##} {sizes[order]}";
+            return string.Format("{0:0.##} {1}", len, sizes[order]);
         }
     }
 } 

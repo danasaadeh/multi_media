@@ -10,7 +10,7 @@ namespace Compression_Vault.Controls
 
         protected override string GetInfoText()
         {
-            return $"({FormatFileSize(Item.Size)})";
+            return string.Format("({0})", FormatFileSize(Item.Size));
         }
 
         private string FormatFileSize(long bytes)
@@ -23,7 +23,7 @@ namespace Compression_Vault.Controls
                 order++;
                 len = len / 1024;
             }
-            return $"{len:0.##} {sizes[order]}";
+            return string.Format("{0:0.##} {1}", len, sizes[order]);
         }
     }
 } 

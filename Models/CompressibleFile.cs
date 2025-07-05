@@ -16,7 +16,10 @@ namespace Compression_Vault.Models
         public string FullPath => _fileInfo.FullName;
         public long Size => _fileInfo.Length;
         public int FileCount => 1;
-        public string DisplayText => $"{Name} ({FormatFileSize(Size)})";
+        public string DisplayText 
+        { 
+            get { return string.Format("{0} ({1})", Name, FormatFileSize(Size)); } 
+        }
 
         public event EventHandler<ICompressibleItem> RemoveRequested;
 
@@ -35,7 +38,7 @@ namespace Compression_Vault.Models
                 order++;
                 len = len / 1024;
             }
-            return $"{len:0.##} {sizes[order]}";
+            return string.Format("{0:0.##} {1}", len, sizes[order]);
         }
     }
 }

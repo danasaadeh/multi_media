@@ -57,6 +57,10 @@
     <Compile Include="Algorithms\ShannonFanoTreeBuilder.cs" />
     <Compile Include="Algorithms\ShannonFanoDataCompressor.cs" />
     <Compile Include="Algorithms\ShannonFanoParallelProcessor.cs" />
+    <Compile Include="Algorithms\ShannonFanoDecompression.cs" />
+    <Compile Include="Algorithms\ShannonFanoParallelDecompressor.cs" />
+    <Compile Include="Algorithms\HuffmanDecompression.cs" />
+    <Compile Include="Algorithms\HuffmanParallelDecompressor.cs" />
     <Compile Include="Controls\BaseItemControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -76,9 +80,11 @@
     </Compile>
     <Compile Include="Managers\ICompressionItemManager.cs" />
     <Compile Include="Managers\CompressionItemManager.cs" />
+    <Compile Include="Managers\DecompressionManager.cs" />
     <Compile Include="Models\ICompressibleItem.cs" />
     <Compile Include="Models\CompressibleFile.cs" />
     <Compile Include="Models\CompressibleFolder.cs" />
+    <Compile Include="Models\DecompressionModels.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\IFileSelectionService.cs" />
@@ -88,6 +94,8 @@
     <Compile Include="Services\ICompressionAlgorithm.cs" />
     <Compile Include="Services\ICompressionService.cs" />
     <Compile Include="Services\CompressionService.cs" />
+    <Compile Include="Services\IDecompressionAlgorithm.cs" />
+    <Compile Include="Services\DecompressionService.cs" />
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>

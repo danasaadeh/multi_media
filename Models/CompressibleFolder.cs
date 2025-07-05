@@ -19,7 +19,10 @@ namespace Compression_Vault.Models
         public string FullPath => _directoryInfo.FullName;
         public long Size => _files.Value.Sum(f => f.Length);
         public int FileCount => _files.Value.Length;
-        public string DisplayText => $"{Name} ({FileCount} files)";
+        public string DisplayText 
+        { 
+            get { return string.Format("{0} ({1} files)", Name, FileCount); } 
+        }
 
         public event EventHandler<ICompressibleItem> RemoveRequested;
 

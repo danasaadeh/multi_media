@@ -10,7 +10,7 @@ namespace Compression_Vault.Controls
 
         protected override string GetInfoText()
         {
-            return $"({Item.FileCount} files)";
+            return string.Format("({0} files)", Item.FileCount);
         }
     }
 } 
