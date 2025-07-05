@@ -128,7 +128,15 @@ namespace Compression_Vault
             string staticFolder = Path.Combine(Application.StartupPath, "CompressedFiles");
             Directory.CreateDirectory(staticFolder);
 
-            string fileName = $"Archive_{DateTime.Now:yyyyMMdd_HHmmss}.cva";
+            string inputName = PromptForArchiveName();
+            if (string.IsNullOrWhiteSpace(inputName))
+            {
+                MessageBox.Show("Compression cancelled. No name was provided.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string fileName = inputName.EndsWith(".cva") ? inputName : inputName + ".cva";
+
             string outputPath = Path.Combine(staticFolder, fileName);
 
             await PerformCompression(outputPath);
@@ -329,6 +337,29 @@ namespace Compression_Vault
                 listViewArchive.Items.Add(item);
             }
         }
+
+
+        private string PromptForArchiveName()
+        {
+            using (Form prompt = new Form())
+            {
+                prompt.Width = 400;
+                prompt.Height = 150;
+                prompt.Text = "Name Your Archive";
+
+                Label textLabel = new Label() { Left = 20, Top = 20, Text = "Enter archive name:", Width = 340 };
+                TextBox inputBox = new TextBox() { Left = 20, Top = 50, Width = 340 };
+
+                Button confirmation = new Button() { Text = "OK", Left = 270, Width = 90, Top = 80, DialogResult = DialogResult.OK };
+                prompt.Controls.Add(textLabel);
+                prompt.Controls.Add(inputBox);
+                prompt.Controls.Add(confirmation);
+                prompt.AcceptButton = confirmation;
+
+                return prompt.ShowDialog() == DialogResult.OK ? inputBox.Text.Trim() : null;
+            }
+        }
+
 
     }
 }
