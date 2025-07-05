@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,14 @@ namespace Compression_Vault
         public Form1()
         {
             InitializeComponent();
+            tabControl.SelectedIndexChanged += (s, e) =>
+            {
+                if (tabControl.SelectedTab == tabExtract)
+                    LoadCompressedArchives();
+            };
+
+           
+
 
             _fileSelectionService = new FileSelectionService();
             _summaryService = new CompressionSummaryService();
@@ -116,17 +125,15 @@ namespace Compression_Vault
             _lastCompressionResult = null;
             UpdateCompressionStats(null);
 
-            using (var saveDialog = new SaveFileDialog())
-            {
-                saveDialog.Filter = "Compression Vault Archive (*.cva)|*.cva|All Files (*.*)|*.*";
-                saveDialog.Title = "Save Compressed Archive";
-                saveDialog.FileName = "archive.cva";
+            string staticFolder = Path.Combine(Application.StartupPath, "CompressedFiles");
+            Directory.CreateDirectory(staticFolder);
 
-                if (saveDialog.ShowDialog() != DialogResult.OK)
-                    return;
+            string fileName = $"Archive_{DateTime.Now:yyyyMMdd_HHmmss}.cva";
+            string outputPath = Path.Combine(staticFolder, fileName);
 
-                await PerformCompression(saveDialog.FileName);
-            }
+            await PerformCompression(outputPath);
+
+
         }
 
         private async Task PerformCompression(string outputPath)
@@ -169,7 +176,10 @@ namespace Compression_Vault
                     UpdateCompressionStats(result);
                     lblStatus.Text = $"Compression completed successfully! Original: {FormatFileSize(result.OriginalSize)}, Compressed: {FormatFileSize(result.CompressedSize)}, Ratio: {ratio:P2}, Time: {result.Duration:mm\\:ss}";
                     _statusTimer.Start();
+                    LoadCompressedArchives(); // Refresh list after new file saved
+
                 }
+
                 else
                 {
                     MessageBox.Show($"Compression failed: {result.ErrorMessage}", "Compression Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -300,5 +310,25 @@ namespace Compression_Vault
             if (originalSize == 0) return 0;
             return (double)compressedSize / originalSize;
         }
+
+        private void LoadCompressedArchives()
+        {
+            string staticFolder = Path.Combine(Application.StartupPath, "CompressedFiles");
+            Directory.CreateDirectory(staticFolder);
+
+            listViewArchive.Items.Clear();
+
+            var files = Directory.GetFiles(staticFolder, "*.cva");
+            foreach (var file in files)
+            {
+                FileInfo info = new FileInfo(file);
+                var item = new ListViewItem(info.Name);
+                item.SubItems.Add(info.Length.ToString("N0") + " bytes");
+                item.SubItems.Add(info.CreationTime.ToString("g"));
+                item.Tag = file; // optional: store full path
+                listViewArchive.Items.Add(item);
+            }
+        }
+
     }
 }

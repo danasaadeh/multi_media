@@ -20,6 +20,9 @@ namespace Compression_Vault
 
         private void InitializeComponent()
         {
+         
+
+
             this.tabControl = new TabControl();
             this.tabCompress = new TabPage();
             this.tabExtract = new TabPage();
@@ -304,12 +307,18 @@ namespace Compression_Vault
 
             // 
             // listViewArchive
-            // 
+
+
+            // listViewArchive
             this.listViewArchive.Location = new Point(15, 90);
-            this.listViewArchive.Size = new Size(608, 350);
+            this.listViewArchive.Size = new Size(600, 350);
             this.listViewArchive.View = View.Details;
             this.listViewArchive.FullRowSelect = true;
             this.listViewArchive.HideSelection = false;
+            this.listViewArchive.Columns.Add("File Name", 400);
+            this.listViewArchive.Columns.Add("Size", 150);
+
+
 
             // 
             // Form1
