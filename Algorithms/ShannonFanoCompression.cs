@@ -16,7 +16,10 @@ namespace Compression_Vault.Algorithms
     /// </summary>
     public class ShannonFanoCompression : ICompressionAlgorithm
     {
-        public string Name => "Shannon-Fano";
+        public string Name 
+        { 
+            get { return "Shannon-Fano"; } 
+        }
 
         public async Task<CompressionResult> CompressAsync(IEnumerable<ICompressibleItem> items, string outputPath, string password = null, IProgress<CompressionProgress> progress = null, CancellationToken cancellationToken = default)
         {
@@ -71,7 +74,7 @@ namespace Compression_Vault.Algorithms
                             ProcessedBytes = processedBytes,
                             TotalBytes = totalSize,
                             Percentage = (double)processedBytes / totalSize * 100,
-                            Status = $"Writing {compressedItem.ItemName}..."
+                            Status = string.Format("Writing {0}...", compressedItem.ItemName)
                         });
 
                         // Write compressed item data
@@ -86,7 +89,7 @@ namespace Compression_Vault.Algorithms
                             ProcessedBytes = processedBytes,
                             TotalBytes = totalSize,
                             Percentage = (double)processedBytes / totalSize * 100,
-                            Status = $"Completed {compressedItem.ItemName}"
+                            Status = string.Format("Completed {0}", compressedItem.ItemName)
                         });
                     }
                 }
@@ -109,7 +112,7 @@ namespace Compression_Vault.Algorithms
             }
             catch (Exception ex)
             {
-                result.ErrorMessage = $"Compression failed: {ex.Message}";
+                result.ErrorMessage = string.Format("Compression failed: {0}", ex.Message);
                 return result;
             }
         }
@@ -155,7 +158,7 @@ namespace Compression_Vault.Algorithms
             if (compressedItem.FolderFiles != null)
             {
                 // Write folder marker and process folder files
-                writer.Write($"FOLDER:{compressedItem.ItemName}");
+                writer.Write(string.Format("FOLDER:{0}", compressedItem.ItemName));
                 foreach (var fileData in compressedItem.FolderFiles)
                 {
                     writer.Write(fileData.ItemName);

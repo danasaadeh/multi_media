@@ -29,7 +29,7 @@ namespace Compression_Vault.Services
                 return new CompressionResult
                 {
                     Success = false,
-                    ErrorMessage = $"Algorithm '{algorithm}' is not supported."
+                    ErrorMessage = string.Format("Algorithm '{0}' is not supported.", algorithm)
                 };
             }
 

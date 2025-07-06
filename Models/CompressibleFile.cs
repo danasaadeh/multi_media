@@ -12,10 +12,22 @@ namespace Compression_Vault.Models
             _fileInfo = fileInfo ?? throw new ArgumentNullException(nameof(fileInfo));
         }
 
-        public string Name => _fileInfo.Name;
-        public string FullPath => _fileInfo.FullName;
-        public long Size => _fileInfo.Length;
-        public int FileCount => 1;
+        public string Name 
+        { 
+            get { return _fileInfo.Name; } 
+        }
+        public string FullPath 
+        { 
+            get { return _fileInfo.FullName; } 
+        }
+        public long Size 
+        { 
+            get { return _fileInfo.Length; } 
+        }
+        public int FileCount 
+        { 
+            get { return 1; } 
+        }
         public string DisplayText 
         { 
             get { return string.Format("{0} ({1})", Name, FormatFileSize(Size)); } 

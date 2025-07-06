@@ -15,10 +15,22 @@ namespace Compression_Vault.Models
             _files = new Lazy<FileInfo[]>(() => GetFilesSafely());
         }
 
-        public string Name => _directoryInfo.Name;
-        public string FullPath => _directoryInfo.FullName;
-        public long Size => _files.Value.Sum(f => f.Length);
-        public int FileCount => _files.Value.Length;
+        public string Name 
+        { 
+            get { return _directoryInfo.Name; } 
+        }
+        public string FullPath 
+        { 
+            get { return _directoryInfo.FullName; } 
+        }
+        public long Size 
+        { 
+            get { return _files.Value.Sum(f => f.Length); } 
+        }
+        public int FileCount 
+        { 
+            get { return _files.Value.Length; } 
+        }
         public string DisplayText 
         { 
             get { return string.Format("{0} ({1} files)", Name, FileCount); } 

@@ -8,7 +8,10 @@ namespace Compression_Vault.Algorithms
         public int Frequency { get; set; }
         public ShannonFanoNode Left { get; set; }
         public ShannonFanoNode Right { get; set; }
-        public bool IsLeaf => Left == null && Right == null;
+        public bool IsLeaf 
+        { 
+            get { return Left == null && Right == null; } 
+        }
 
         public ShannonFanoNode(byte symbol, int frequency)
         {

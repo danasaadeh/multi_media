@@ -16,7 +16,10 @@ namespace Compression_Vault.Algorithms
     /// </summary>
     public class ShannonFanoDecompression : IDecompressionAlgorithm
     {
-        public string Name => "Shannon-Fano Decompression";
+        public string Name 
+        { 
+            get { return "Shannon-Fano Decompression"; } 
+        }
 
         public async Task<DecompressionResult> DecompressAsync(string inputPath, string outputDirectory, string password = null, IProgress<DecompressionProgress> progress = null, CancellationToken cancellationToken = default)
         {
@@ -80,7 +83,7 @@ namespace Compression_Vault.Algorithms
                                 ProcessedBytes = processedBytes,
                                 TotalBytes = totalBytes,
                                 Percentage = (double)processedBytes / totalBytes * 100,
-                                Status = $"Completed {decompressedItem.ItemName}"
+                                Status = string.Format("Completed {0}", decompressedItem.ItemName)
                             });
                         }
                         else
@@ -107,7 +110,7 @@ namespace Compression_Vault.Algorithms
             }
             catch (Exception ex)
             {
-                result.ErrorMessage = $"Decompression failed: {ex.Message}";
+                result.ErrorMessage = string.Format("Decompression failed: {0}", ex.Message);
                 return result;
             }
         }

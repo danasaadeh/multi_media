@@ -11,7 +11,10 @@ namespace Compression_Vault.Managers
 
         public event EventHandler ItemsChanged;
 
-        public IReadOnlyList<ICompressibleItem> Items => _items.AsReadOnly();
+        public IReadOnlyList<ICompressibleItem> Items 
+        { 
+            get { return _items.AsReadOnly(); } 
+        }
 
         public void AddItems(IEnumerable<ICompressibleItem> items)
         {
