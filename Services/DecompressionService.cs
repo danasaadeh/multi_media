@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Compression_Vault.Algorithms;
+using Compression_Vault.Models;
 
 namespace Compression_Vault.Services
 {
@@ -511,19 +512,6 @@ namespace Compression_Vault.Services
             }
         }
 
-        private class HeaderInfo
-        {
-            public bool IsValid { get; set; }
-            public string ErrorMessage { get; set; }
-            public List<CompressedItemInfo> Items { get; set; }
-        }
-
-        private class CompressedItemInfo
-        {
-            public string Name { get; set; }
-            public long Size { get; set; }
-            public int FileCount { get; set; }
-            public bool IsFolder { get; set; }
-        }
+        // تم نقل الفئات المشتركة إلى Models/CompressionModels.cs
     }
 } 

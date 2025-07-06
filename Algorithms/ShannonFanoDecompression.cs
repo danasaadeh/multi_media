@@ -152,9 +152,8 @@ namespace Compression_Vault.Algorithms
                     }
 
                     var storedHash = reader.ReadBytes(hashLength);
-                    var computedHash = ComputePasswordHash(password);
-
-                    if (!storedHash.SequenceEqual(computedHash))
+                    
+                    if (!PasswordHelper.VerifyPassword(password, storedHash))
                     {
                         headerInfo.ErrorMessage = "Incorrect password.";
                         return headerInfo;
@@ -506,48 +505,7 @@ namespace Compression_Vault.Algorithms
             }
         }
 
-        /// <summary>
-        /// حساب hash كلمة المرور
-        /// </summary>
-        private byte[] ComputePasswordHash(string password)
-        {
-            using (var sha256 = SHA256.Create())
-            {
-                return sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-            }
-        }
-
-        /// <summary>
-        /// معلومات الرأس
-        /// </summary>
-        private class HeaderInfo
-        {
-            public bool IsValid { get; set; }
-            public string ErrorMessage { get; set; }
-            public List<CompressedItemInfo> Items { get; set; }
-        }
-
-        /// <summary>
-        /// معلومات العنصر المضغوط
-        /// </summary>
-        private class CompressedItemInfo
-        {
-            public string Name { get; set; }
-            public long Size { get; set; }
-            public int FileCount { get; set; }
-            public bool IsFolder { get; set; }
-        }
-
-        /// <summary>
-        /// بيانات العنصر المفكوك
-        /// </summary>
-        private class DecompressedItemData
-        {
-            public string ItemName { get; set; }
-            public string OutputPath { get; set; }
-            public long OriginalSize { get; set; }
-            public bool Success { get; set; }
-            public string ErrorMessage { get; set; }
-        }
+        // تم نقل الفئات المشتركة إلى Models/CompressionModels.cs
+        // تم نقل دالة ComputePasswordHash إلى PasswordHelper
     }
 } 

@@ -26,6 +26,8 @@ namespace Compression_Vault
         private System.Windows.Forms.Timer _statusTimer;
         private CompressionResult _lastCompressionResult;
         private DecompressionResult _lastDecompressionResult;
+        private string _currentCompressionPath; // مسار الملف المضغوط الحالي
+        private string _currentExtractionPath; // مسار مجلد الاستخراج الحالي
 
         public Form1()
         {
@@ -183,6 +185,9 @@ namespace Compression_Vault
         {
             try
             {
+                // تخزين مسار الملف المضغوط الحالي
+                _currentCompressionPath = outputPath;
+                
                 btnStart.Text = "Cancel Compression";
                 btnStart.Enabled = true;
                 progressBar.Value = 0;
@@ -225,6 +230,16 @@ namespace Compression_Vault
 
                 else
                 {
+                    // حذف الملف المضغوط في حالة الفشل
+                    if (!string.IsNullOrEmpty(_currentCompressionPath) && File.Exists(_currentCompressionPath))
+                    {
+                        try
+                        {
+                            File.Delete(_currentCompressionPath);
+                        }
+                        catch { /* تجاهل أخطاء الحذف */ }
+                    }
+                    
                     MessageBox.Show(string.Format("Compression failed: {0}", result.ErrorMessage), "Compression Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
@@ -234,6 +249,16 @@ namespace Compression_Vault
             }
             catch (Exception ex)
             {
+                // حذف الملف المضغوط في حالة حدوث خطأ
+                if (!string.IsNullOrEmpty(_currentCompressionPath) && File.Exists(_currentCompressionPath))
+                {
+                    try
+                    {
+                        File.Delete(_currentCompressionPath);
+                    }
+                    catch { /* تجاهل أخطاء الحذف */ }
+                }
+                
                 MessageBox.Show(string.Format("An error occurred: {0}", ex.Message), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -246,6 +271,89 @@ namespace Compression_Vault
         {
             _cancellationTokenSource?.Cancel();
             lblStatus.Text = "Cancelling compression...";
+            
+            // حذف الملف المضغوط إذا كان موجوداً
+            if (!string.IsNullOrEmpty(_currentCompressionPath) && File.Exists(_currentCompressionPath))
+            {
+                try
+                {
+                    File.Delete(_currentCompressionPath);
+                    lblStatus.Text = "Compression cancelled and file deleted.";
+                }
+                catch (Exception ex)
+                {
+                    lblStatus.Text = "Compression cancelled but could not delete file: " + ex.Message;
+                }
+            }
+        }
+
+        private void CancelExtraction()
+        {
+            _cancellationTokenSource?.Cancel();
+            lblExtractStatus.Text = "Cancelling extraction...";
+            
+            // حذف الملفات المستخرجة إذا كان المجلد موجوداً
+            if (!string.IsNullOrEmpty(_currentExtractionPath) && Directory.Exists(_currentExtractionPath))
+            {
+                try
+                {
+                    CleanupExtractedFiles(_currentExtractionPath);
+                    lblExtractStatus.Text = "Extraction cancelled and extracted files deleted.";
+                }
+                catch (Exception ex)
+                {
+                    lblExtractStatus.Text = "Extraction cancelled but could not delete extracted files: " + ex.Message;
+                }
+            }
+        }
+
+        /// <summary>
+        /// تنظيف الملفات المستخرجة من مجلد معين
+        /// </summary>
+        private void CleanupExtractedFiles(string directoryPath)
+        {
+            if (!Directory.Exists(directoryPath))
+                return;
+
+            try
+            {
+                // حذف جميع الملفات في المجلد
+                var files = Directory.GetFiles(directoryPath, "*", SearchOption.AllDirectories);
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        File.Delete(file);
+                    }
+                    catch { /* تجاهل أخطاء حذف الملفات الفردية */ }
+                }
+                
+                // حذف المجلدات الفارغة
+                var directories = Directory.GetDirectories(directoryPath, "*", SearchOption.AllDirectories)
+                    .OrderByDescending(d => d.Length); // حذف المجلدات الفرعية أولاً
+                
+                foreach (var dir in directories)
+                {
+                    try
+                    {
+                        if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
+                        {
+                            Directory.Delete(dir);
+                        }
+                    }
+                    catch { /* تجاهل أخطاء حذف المجلدات الفردية */ }
+                }
+                
+                // حذف المجلد الرئيسي إذا كان فارغاً
+                if (Directory.Exists(directoryPath) && !Directory.EnumerateFileSystemEntries(directoryPath).Any())
+                {
+                    Directory.Delete(directoryPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to cleanup extracted files: {ex.Message}", ex);
+            }
         }
 
         private void UpdateProgress(CompressionProgress progress)
@@ -304,6 +412,9 @@ namespace Compression_Vault
 
             _cancellationTokenSource?.Dispose();
             _cancellationTokenSource = null;
+            
+            // مسح مسار الملف المضغوط الحالي
+            _currentCompressionPath = null;
         }
 
         private void OnItemsChanged(object sender, EventArgs e)
@@ -416,25 +527,35 @@ namespace Compression_Vault
 
         private async void BtnExtract_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(txtArchivePath.Text) || !File.Exists(txtArchivePath.Text))
+            if (btnExtract.Text == "Extract Archive")
             {
-                MessageBox.Show("Please select a valid archive file.", "Invalid Archive", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
+                if (string.IsNullOrEmpty(txtArchivePath.Text) || !File.Exists(txtArchivePath.Text))
+                {
+                    MessageBox.Show("Please select a valid archive file.", "Invalid Archive", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
 
-            if (string.IsNullOrEmpty(txtExtractPath.Text))
+                if (string.IsNullOrEmpty(txtExtractPath.Text))
+                {
+                    MessageBox.Show("Please select an extraction directory.", "No Extraction Path", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                await StartDecompression();
+            }
+            else
             {
-                MessageBox.Show("Please select an extraction directory.", "No Extraction Path", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                CancelExtraction();
             }
-
-            await StartDecompression();
         }
 
         private async Task StartDecompression()
         {
             try
             {
+                // تخزين مسار مجلد الاستخراج الحالي
+                _currentExtractionPath = txtExtractPath.Text;
+                
                 btnExtract.Text = "Cancel Extraction";
                 btnExtract.Enabled = true;
                 progressBarExtract.Value = 0;
@@ -470,6 +591,16 @@ namespace Compression_Vault
                 }
                 else
                 {
+                    // حذف الملفات المستخرجة في حالة الفشل
+                    if (!string.IsNullOrEmpty(_currentExtractionPath) && Directory.Exists(_currentExtractionPath))
+                    {
+                        try
+                        {
+                            CleanupExtractedFiles(_currentExtractionPath);
+                        }
+                        catch { /* تجاهل أخطاء الحذف */ }
+                    }
+                    
                     MessageBox.Show(string.Format("Extraction failed: {0}", result.ErrorMessage), "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
@@ -479,6 +610,16 @@ namespace Compression_Vault
             }
             catch (Exception ex)
             {
+                // حذف الملفات المستخرجة في حالة حدوث خطأ
+                if (!string.IsNullOrEmpty(_currentExtractionPath) && Directory.Exists(_currentExtractionPath))
+                {
+                    try
+                    {
+                        CleanupExtractedFiles(_currentExtractionPath);
+                    }
+                    catch { /* تجاهل أخطاء الحذف */ }
+                }
+                
                 MessageBox.Show(string.Format("An error occurred: {0}", ex.Message), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -540,6 +681,9 @@ namespace Compression_Vault
 
             _cancellationTokenSource?.Dispose();
             _cancellationTokenSource = null;
+            
+            // مسح مسار الاستخراج الحالي
+            _currentExtractionPath = null;
         }
 
         private async void LoadArchiveInfo(string filePath)
@@ -623,6 +767,9 @@ namespace Compression_Vault
         {
             try
             {
+                // تخزين مسار مجلد الاستخراج الحالي
+                _currentExtractionPath = txtExtractPath.Text;
+                
                 btnExtract.Text = "Extracting...";
                 btnExtract.Enabled = false;
                 progressBarExtract.Value = 0;
@@ -656,6 +803,16 @@ namespace Compression_Vault
                 }
                 else
                 {
+                    // حذف الملفات المستخرجة في حالة الفشل
+                    if (!string.IsNullOrEmpty(_currentExtractionPath) && Directory.Exists(_currentExtractionPath))
+                    {
+                        try
+                        {
+                            CleanupExtractedFiles(_currentExtractionPath);
+                        }
+                        catch { /* تجاهل أخطاء الحذف */ }
+                    }
+                    
                     MessageBox.Show(string.Format("Single file extraction failed: {0}", result.ErrorMessage), "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
@@ -665,6 +822,16 @@ namespace Compression_Vault
             }
             catch (Exception ex)
             {
+                // حذف الملفات المستخرجة في حالة حدوث خطأ
+                if (!string.IsNullOrEmpty(_currentExtractionPath) && Directory.Exists(_currentExtractionPath))
+                {
+                    try
+                    {
+                        CleanupExtractedFiles(_currentExtractionPath);
+                    }
+                    catch { /* تجاهل أخطاء الحذف */ }
+                }
+                
                 MessageBox.Show(string.Format("An error occurred: {0}", ex.Message), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally

@@ -130,7 +130,7 @@ namespace Compression_Vault.Algorithms
             writer.Write(hasPassword);
             if (hasPassword)
             {
-                var passwordHash = ComputePasswordHash(password);
+                var passwordHash = PasswordHelper.ComputePasswordHash(password);
                 writer.Write(passwordHash.Length);
                 writer.Write(passwordHash);
             }
@@ -196,15 +196,6 @@ namespace Compression_Vault.Algorithms
             }
         }
 
-        /// <summary>
-        /// حساب hash كلمة المرور
-        /// </summary>
-        private byte[] ComputePasswordHash(string password)
-        {
-            using (var sha256 = SHA256.Create())
-            {
-                return sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-            }
-        }
+        // تم نقل دالة ComputePasswordHash إلى PasswordHelper في Models/CompressionModels.cs
     }
 } 

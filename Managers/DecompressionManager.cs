@@ -221,14 +221,5 @@ namespace Compression_Vault.Managers
         }
     }
 
-    /// <summary>
-    /// معلومات العنصر المضغوط
-    /// </summary>
-    public class CompressedItemInfo
-    {
-        public string Name { get; set; }
-        public long Size { get; set; }
-        public int FileCount { get; set; }
-        public bool IsFolder { get; set; }
-    }
+    // تم نقل الفئة CompressedItemInfo إلى Models/CompressionModels.cs
 } 

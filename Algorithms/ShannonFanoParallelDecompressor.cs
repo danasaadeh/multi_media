@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Compression_Vault.Models;
 using Compression_Vault.Services;
+using Compression_Vault.Algorithms;
 
 namespace Compression_Vault.Algorithms
 {
@@ -344,27 +345,6 @@ namespace Compression_Vault.Algorithms
             }
         }
 
-        /// <summary>
-        /// معلومات العنصر المضغوط
-        /// </summary>
-        public class CompressedItemInfo
-        {
-            public string Name { get; set; }
-            public long Size { get; set; }
-            public int FileCount { get; set; }
-            public bool IsFolder { get; set; }
-        }
-
-        /// <summary>
-        /// بيانات العنصر المفكوك
-        /// </summary>
-        public class DecompressedItemData
-        {
-            public string ItemName { get; set; }
-            public string OutputPath { get; set; }
-            public long OriginalSize { get; set; }
-            public bool Success { get; set; }
-            public string ErrorMessage { get; set; }
-        }
+        // تم نقل الفئات المشتركة إلى Models/CompressionModels.cs
     }
 } 
