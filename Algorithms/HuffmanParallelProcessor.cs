@@ -65,7 +65,7 @@ namespace Compression_Vault.Algorithms
                         CompressedSize = buffer.Length,
                         FrequencyTable = null,
                         CompressedData = buffer,
-                        ValidBitsInLastByte = 8,
+                        ValidBitsInLastByte = (byte)(buffer.Length > 0 ? 8 : 0),
                         IsCompressed = false
                     };
                 }
@@ -96,7 +96,7 @@ namespace Compression_Vault.Algorithms
                         {
                             ItemName = file.Name,
                             OriginalSize = buffer.Length,
-                            CompressedSize = totalCompressedSize,
+                            CompressedSize = compressResult.CompressedBytes.Length, // Only compressed data size, not including metadata
                             FrequencyTable = frequencies,
                             CompressedData = compressResult.CompressedBytes,
                             ValidBitsInLastByte = compressResult.ValidBitsInLastByte,
@@ -112,7 +112,7 @@ namespace Compression_Vault.Algorithms
                             CompressedSize = buffer.Length,
                             FrequencyTable = null,
                             CompressedData = buffer,
-                            ValidBitsInLastByte = 8,
+                            ValidBitsInLastByte = (byte)(buffer.Length > 0 ? 8 : 0),
                             IsCompressed = false
                         };
                     }
@@ -145,13 +145,6 @@ namespace Compression_Vault.Algorithms
 
             // Wait for all file compression tasks to complete
             var compressedFiles = await Task.WhenAll(fileCompressionTasks);
-
-            // Update the ItemName to use relative paths for proper folder structure
-            for (int i = 0; i < files.Length; i++)
-            {
-                var relativePath = GetRelativePath(directoryInfo.FullName, files[i].FullName);
-                compressedFiles[i].ItemName = relativePath;
-            }
 
             return new CompressedItemData
             {

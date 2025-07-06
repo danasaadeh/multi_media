@@ -20,6 +20,7 @@ namespace Compression_Vault
         private readonly IItemControlFactory _controlFactory;
         private readonly ICompressionService _compressionService;
         private readonly DecompressionManager _decompressionManager;
+        private readonly DecompressionService _decompressionService;
         private FlowLayoutPanel _flowPanelFiles;
         private CancellationTokenSource _cancellationTokenSource;
         private System.Windows.Forms.Timer _statusTimer;
@@ -36,6 +37,7 @@ namespace Compression_Vault
             _controlFactory = new ItemControlFactory();
             _compressionService = new CompressionService();
             _decompressionManager = new DecompressionManager();
+            _decompressionService = new DecompressionService();
 
             _statusTimer = new System.Windows.Forms.Timer();
             _statusTimer.Interval = 5000;
@@ -65,6 +67,25 @@ namespace Compression_Vault
 
             tabCompress.Controls.Remove(listBoxFiles);
             tabCompress.Controls.Add(_flowPanelFiles);
+
+            // Initialize ListView context menu for single file extraction
+            InitializeListViewContextMenu();
+        }
+
+        private void InitializeListViewContextMenu()
+        {
+            var contextMenu = new ContextMenuStrip();
+            
+            var extractAllItem = new ToolStripMenuItem("Extract All Files");
+            extractAllItem.Click += (s, e) => BtnExtract_Click(s, e);
+            
+            var extractSingleItem = new ToolStripMenuItem("Extract Single File...");
+            extractSingleItem.Click += (s, e) => ExtractSingleFile();
+            
+            contextMenu.Items.Add(extractAllItem);
+            contextMenu.Items.Add(extractSingleItem);
+            
+            listViewArchive.ContextMenuStrip = contextMenu;
         }
 
         private void WireUpEvents()
@@ -444,8 +465,8 @@ namespace Compression_Vault
                 {
                     _lastDecompressionResult = result;
                     UpdateDecompressionStats(result);
-                    lblExtractStatus.Text = string.Format("Extraction completed successfully! Extracted: {0} files, Time: {1:mm\\:ss}", result.ExtractedFiles.Count, result.Duration);
-                    MessageBox.Show(string.Format("Extraction completed successfully!\n\nExtracted {0} files to:\n{1}", result.ExtractedFiles.Count, txtExtractPath.Text), "Extraction Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                    lblExtractStatus.Text = string.Format("Extraction completed successfully! Extracted: {0} files, Time: {1:mm\\:ss}", result.ExtractedFiles.Count, result.Duration);
+                MessageBox.Show(string.Format("Extraction completed successfully!\n\nExtracted {0} files to:\n{1}", result.ExtractedFiles.Count, txtExtractPath.Text), "Extraction Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
@@ -528,10 +549,10 @@ namespace Compression_Vault
                 var fileInfo = await _decompressionManager.GetCompressedFileInfoAsync(filePath);
                 if (fileInfo != null && string.IsNullOrEmpty(fileInfo.ErrorMessage))
                 {
-                    lblArchiveAlgorithm.Text = string.Format("Algorithm: {0}", fileInfo.Algorithm);
-                    lblArchiveSize.Text = string.Format("Archive Size: {0}", FormatFileSize(fileInfo.CompressedSize));
-                    lblArchiveItems.Text = string.Format("Items: {0}", fileInfo.ItemCount);
-                    lblArchivePassword.Text = string.Format("Password Protected: {0}", fileInfo.HasPassword ? "Yes" : "No");
+                                    lblArchiveAlgorithm.Text = string.Format("Algorithm: {0}", fileInfo.Algorithm);
+                lblArchiveSize.Text = string.Format("Archive Size: {0}", FormatFileSize(fileInfo.CompressedSize));
+                lblArchiveItems.Text = string.Format("Items: {0}", fileInfo.ItemCount);
+                lblArchivePassword.Text = string.Format("Password Protected: {0}", fileInfo.HasPassword ? "Yes" : "No");
                     
                     // Enable/disable password field
                     txtExtractPassword.Enabled = fileInfo.HasPassword;
@@ -570,6 +591,106 @@ namespace Compression_Vault
                     txtArchivePath.Text = filePath;
                     LoadArchiveInfo(filePath);
                 }
+            }
+        }
+
+        private async void ExtractSingleFile()
+        {
+            if (string.IsNullOrEmpty(txtArchivePath.Text) || !File.Exists(txtArchivePath.Text))
+            {
+                MessageBox.Show("Please select a valid archive file.", "Invalid Archive", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(txtExtractPath.Text))
+            {
+                MessageBox.Show("Please select an extraction directory.", "No Extraction Path", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Prompt user for file name to extract
+            string fileNameToExtract = PromptForFileNameToExtract();
+            if (string.IsNullOrWhiteSpace(fileNameToExtract))
+            {
+                MessageBox.Show("No file name provided for extraction.", "No File Name", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            await ExtractSingleFileAsync(fileNameToExtract);
+        }
+
+        private async Task ExtractSingleFileAsync(string fileName)
+        {
+            try
+            {
+                btnExtract.Text = "Extracting...";
+                btnExtract.Enabled = false;
+                progressBarExtract.Value = 0;
+                progressBarExtract.Style = ProgressBarStyle.Continuous;
+                lblExtractStatus.Text = "Extracting single file...";
+
+                btnBrowseArchive.Enabled = false;
+                btnBrowseExtractPath.Enabled = false;
+                txtArchivePath.Enabled = false;
+                txtExtractPath.Enabled = false;
+                txtExtractPassword.Enabled = false;
+
+                _cancellationTokenSource = new CancellationTokenSource();
+                string password = string.IsNullOrEmpty(txtExtractPassword.Text) ? null : txtExtractPassword.Text;
+                var progress = new Progress<DecompressionProgress>(UpdateDecompressionProgress);
+
+                var result = await _decompressionService.ExtractSingleFileAsync(
+                    txtArchivePath.Text,
+                    fileName,
+                    txtExtractPath.Text,
+                    password,
+                    progress,
+                    _cancellationTokenSource.Token);
+
+                if (result.Success)
+                {
+                    _lastDecompressionResult = result;
+                    UpdateDecompressionStats(result);
+                    lblExtractStatus.Text = string.Format("Single file extraction completed! Extracted: {0}", fileName);
+                    MessageBox.Show(string.Format("File '{0}' extracted successfully to:\n{1}", fileName, txtExtractPath.Text), "Extraction Complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show(string.Format("Single file extraction failed: {0}", result.ErrorMessage), "Extraction Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                MessageBox.Show("Single file extraction was cancelled.", "Extraction Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(string.Format("An error occurred: {0}", ex.Message), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                ResetDecompressionUI();
+            }
+        }
+
+        private string PromptForFileNameToExtract()
+        {
+            using (Form prompt = new Form())
+            {
+                prompt.Width = 400;
+                prompt.Height = 150;
+                prompt.Text = "Extract Single File";
+
+                Label textLabel = new Label() { Left = 20, Top = 20, Text = "Enter file name to extract:", Width = 340 };
+                TextBox inputBox = new TextBox() { Left = 20, Top = 50, Width = 340 };
+
+                Button confirmation = new Button() { Text = "OK", Left = 270, Width = 90, Top = 80, DialogResult = DialogResult.OK };
+                prompt.Controls.Add(textLabel);
+                prompt.Controls.Add(inputBox);
+                prompt.Controls.Add(confirmation);
+                prompt.AcceptButton = confirmation;
+
+                return prompt.ShowDialog() == DialogResult.OK ? inputBox.Text.Trim() : null;
             }
         }
 

@@ -206,7 +206,7 @@ namespace Compression_Vault.Algorithms
         }
 
         /// <summary>
-        /// فك ضغط عنصر واحد بالتوازي
+        /// فك ضغط عنصر واحد بشكل متوازي
         /// </summary>
         private async Task<DecompressedItemData> DecompressItemParallelAsync(BinaryReader reader, CompressedItemInfo itemInfo, string outputDirectory, SemaphoreSlim semaphore, CancellationToken cancellationToken)
         {
@@ -222,31 +222,53 @@ namespace Compression_Vault.Algorithms
                     var folderPath = Path.Combine(outputDirectory, itemInfo.Name);
                     Directory.CreateDirectory(folderPath);
                     
-                    // Read folder marker
+                    // Read folder marker and process folder contents
                     var folderMarker = reader.ReadString();
-                    if (!folderMarker.StartsWith("FOLDER:"))
+                    if (folderMarker.StartsWith("FOLDER:"))
                     {
-                        throw new InvalidDataException("Invalid folder marker");
-                    }
-                    
-                    // Decompress all files in the folder
-                    var extractedFiles = new List<string>();
-                    for (int i = 0; i < itemInfo.FileCount; i++)
-                    {
-                        var fileName = reader.ReadString();
-                        var fileOutputPath = Path.Combine(folderPath, fileName);
-                        var fileDir = Path.GetDirectoryName(fileOutputPath);
-                        if (!string.IsNullOrEmpty(fileDir))
+                        // Process all files in the folder
+                        var extractedFiles = new List<string>();
+                        while (reader.BaseStream.Position < reader.BaseStream.Length)
                         {
-                            Directory.CreateDirectory(fileDir);
+                            try
+                            {
+                                // Try to read next file name
+                                var fileName = reader.ReadString();
+                                
+                                // Check if this is the start of the next item (not a file in current folder)
+                                if (fileName.StartsWith("FOLDER:") || IsNextItemStart(reader))
+                                {
+                                    // Put the string back and break
+                                    reader.BaseStream.Position -= System.Text.Encoding.UTF8.GetByteCount(fileName) + 4; // +4 for string length
+                                    break;
+                                }
+                                
+                                // Decompress the file in the folder
+                                var fileOutputPath = Path.Combine(folderPath, fileName);
+                                var fileDir = Path.GetDirectoryName(fileOutputPath);
+                                if (!string.IsNullOrEmpty(fileDir))
+                                {
+                                    Directory.CreateDirectory(fileDir);
+                                }
+                                
+                                await DecompressFileAsync(reader, fileOutputPath, cancellationToken);
+                                extractedFiles.Add(fileOutputPath);
+                            }
+                            catch (EndOfStreamException)
+                            {
+                                // End of stream, folder processing complete
+                                break;
+                            }
                         }
                         
-                        await DecompressFileFromFolderAsync(reader, fileOutputPath, cancellationToken);
-                        extractedFiles.Add(fileOutputPath);
+                        result.OutputPath = folderPath;
+                        result.Success = true;
                     }
-                    
-                    result.OutputPath = folderPath;
-                    result.Success = true;
+                    else
+                    {
+                        result.Success = true;
+                        result.OutputPath = folderPath;
+                    }
                 }
                 else
                 {
@@ -281,98 +303,31 @@ namespace Compression_Vault.Algorithms
         }
 
         /// <summary>
-        /// فك ضغط ملف من داخل مجلد
+        /// Check if the current position is the start of the next item
         /// </summary>
-        private async Task DecompressFileFromFolderAsync(BinaryReader reader, string outputPath, CancellationToken cancellationToken)
+        private bool IsNextItemStart(BinaryReader reader)
         {
             try
             {
-                // Read file metadata (already read fileName in the calling method)
-                var originalSize = reader.ReadInt64();
-                var compressedSize = reader.ReadInt64();
-
-                // Validate sizes
-                if (originalSize < 0 || compressedSize < 0)
+                var currentPosition = reader.BaseStream.Position;
+                
+                // Try to read a string that might be a file name
+                var testString = reader.ReadString();
+                
+                // Check if it looks like a valid file name (not empty, reasonable length)
+                if (string.IsNullOrEmpty(testString) || testString.Length > 260) // Max path length
                 {
-                    throw new InvalidDataException("Invalid file size in metadata");
+                    reader.BaseStream.Position = currentPosition;
+                    return true; // Likely end of current item
                 }
-
-                // Validate size limits
-                if (originalSize > int.MaxValue)
-                {
-                    throw new InvalidDataException("Original file size too large");
-                }
-
-                if (compressedSize > int.MaxValue)
-                {
-                    throw new InvalidDataException("Compressed data too large");
-                }
-
-                // Read frequency table count
-                int frequencyTableCount = reader.ReadInt32();
-
-                if (frequencyTableCount > 0)
-                {
-                    // Validate frequency table count
-                    if (frequencyTableCount > 256)
-                    {
-                        throw new InvalidDataException("Invalid frequency table count");
-                    }
-
-                    // Read frequency table
-                    var frequencyTable = new Dictionary<byte, int>();
-                    for (int i = 0; i < frequencyTableCount; i++)
-                    {
-                        var key = reader.ReadByte();
-                        var value = reader.ReadInt32();
-                        frequencyTable[key] = value;
-                    }
-
-                    // Read compressed data
-                    var compressedData = reader.ReadBytes((int)compressedSize);
-                    
-                    // Check if we have enough data
-                    if (compressedData.Length != compressedSize)
-                    {
-                        throw new EndOfStreamException("Insufficient compressed data");
-                    }
-
-                    var validBitsInLastByte = reader.ReadByte();
-
-                    // Validate valid bits
-                    if (validBitsInLastByte > 8)
-                    {
-                        throw new InvalidDataException(string.Format("Invalid bits count in last byte: {0}", validBitsInLastByte));
-                    }
-
-                    // Build Huffman tree and decompress
-                    var root = HuffmanTreeBuilder.BuildHuffmanTree(frequencyTable);
-                    var decompressedData = DecompressData(root, compressedData, validBitsInLastByte, (int)originalSize);
-
-                    // Write decompressed data
-                    File.WriteAllBytes(outputPath, decompressedData);
-                }
-                else
-                {
-                    // File was not compressed, just copy the data
-                    var data = reader.ReadBytes((int)compressedSize);
-                    
-                    // Check if we have enough data
-                    if (data.Length != compressedSize)
-                    {
-                        throw new EndOfStreamException("Insufficient uncompressed data");
-                    }
-
-                    File.WriteAllBytes(outputPath, data);
-                }
+                
+                // Put the string back
+                reader.BaseStream.Position = currentPosition;
+                return false;
             }
-            catch (EndOfStreamException ex)
+            catch
             {
-                throw new InvalidDataException(string.Format("Failed to read file data: {0}", ex.Message), ex);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidDataException(string.Format("Failed to decompress file: {0}", ex.Message), ex);
+                return true; // End of stream or error, likely end of current item
             }
         }
 
@@ -394,24 +349,13 @@ namespace Compression_Vault.Algorithms
                     throw new InvalidDataException("Invalid file size in metadata");
                 }
 
-                // Validate size limits
-                if (originalSize > int.MaxValue)
-                {
-                    throw new InvalidDataException("Original file size too large");
-                }
-
-                if (compressedSize > int.MaxValue)
-                {
-                    throw new InvalidDataException("Compressed data too large");
-                }
-
                 // Read frequency table count
                 int frequencyTableCount = reader.ReadInt32();
 
                 if (frequencyTableCount > 0)
                 {
                     // Validate frequency table count
-                    if (frequencyTableCount > 256)
+                    if (frequencyTableCount <= 0 || frequencyTableCount > 256)
                     {
                         throw new InvalidDataException("Invalid frequency table count");
                     }
@@ -422,10 +366,22 @@ namespace Compression_Vault.Algorithms
                     {
                         var key = reader.ReadByte();
                         var value = reader.ReadInt32();
+                        
+                        // Validate frequency value
+                        if (value <= 0)
+                        {
+                            throw new InvalidDataException("Invalid frequency value in table");
+                        }
+                        
                         frequencyTable[key] = value;
                     }
 
                     // Read compressed data
+                    if (compressedSize > int.MaxValue)
+                    {
+                        throw new InvalidDataException("Compressed data too large");
+                    }
+
                     var compressedData = reader.ReadBytes((int)compressedSize);
                     
                     // Check if we have enough data
@@ -437,9 +393,9 @@ namespace Compression_Vault.Algorithms
                     var validBitsInLastByte = reader.ReadByte();
 
                     // Validate valid bits
-                    if (validBitsInLastByte > 8)
+                    if (validBitsInLastByte > 8 || validBitsInLastByte < 0)
                     {
-                        throw new InvalidDataException(string.Format("Invalid bits count in last byte: {0}", validBitsInLastByte));
+                        throw new InvalidDataException("Invalid bits count in last byte");
                     }
 
                     // Build Huffman tree and decompress
@@ -452,12 +408,36 @@ namespace Compression_Vault.Algorithms
                 else
                 {
                     // File was not compressed, just copy the data
+                    if (compressedSize > int.MaxValue)
+                    {
+                        throw new InvalidDataException("Uncompressed data too large");
+                    }
+
                     var data = reader.ReadBytes((int)compressedSize);
                     
                     // Check if we have enough data
                     if (data.Length != compressedSize)
                     {
                         throw new EndOfStreamException("Insufficient uncompressed data");
+                    }
+
+                    // Read valid bits for uncompressed data (should be 8 for non-empty files, 0 for empty files)
+                    var validBitsInLastByte = reader.ReadByte();
+                    if (validBitsInLastByte != 8 && validBitsInLastByte != 0)
+                    {
+                        throw new InvalidDataException("Invalid valid bits for uncompressed data");
+                    }
+                    
+                    // For empty files, validBitsInLastByte should be 0
+                    if (compressedSize == 0 && validBitsInLastByte != 0)
+                    {
+                        throw new InvalidDataException("Invalid valid bits for empty file");
+                    }
+                    
+                    // For non-empty files, validBitsInLastByte should be 8
+                    if (compressedSize > 0 && validBitsInLastByte != 8)
+                    {
+                        throw new InvalidDataException("Invalid valid bits for non-empty file");
                     }
 
                     File.WriteAllBytes(outputPath, data);
@@ -478,6 +458,12 @@ namespace Compression_Vault.Algorithms
         /// </summary>
         private byte[] DecompressData(HuffmanNode root, byte[] compressedData, byte validBitsInLastByte, int originalSize)
         {
+            // Handle empty data case
+            if (originalSize == 0 || compressedData.Length == 0)
+            {
+                return new byte[0];
+            }
+            
             var decompressedData = new List<byte>();
             var currentNode = root;
 

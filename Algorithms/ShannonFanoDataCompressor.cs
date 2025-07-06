@@ -111,6 +111,13 @@ namespace Compression_Vault.Algorithms
         private static (byte[] CompressedBytes, byte ValidBitsInLastByte) PackBitsToBytes(List<bool> compressedBits)
         {
             var compressedBytes = new List<byte>();
+            
+            // Handle empty data case
+            if (compressedBits.Count == 0)
+            {
+                return (new byte[0], 0);
+            }
+            
             int i = 0;
             for (; i + 8 <= compressedBits.Count; i += 8)
             {

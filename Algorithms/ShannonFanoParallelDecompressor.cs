@@ -39,8 +39,54 @@ namespace Compression_Vault.Algorithms
                     // Handle folder decompression
                     var folderPath = Path.Combine(outputDirectory, itemInfo.Name);
                     Directory.CreateDirectory(folderPath);
-                    result.OutputPath = folderPath;
-                    result.Success = true;
+                    
+                    // Read folder marker and process folder contents
+                    var folderMarker = reader.ReadString();
+                    if (folderMarker.StartsWith("FOLDER:"))
+                    {
+                        // Process all files in the folder
+                        var extractedFiles = new List<string>();
+                        while (reader.BaseStream.Position < reader.BaseStream.Length)
+                        {
+                            try
+                            {
+                                // Try to read next file name
+                                var fileName = reader.ReadString();
+                                
+                                // Check if this is the start of the next item (not a file in current folder)
+                                if (fileName.StartsWith("FOLDER:") || IsNextItemStart(reader))
+                                {
+                                    // Put the string back and break
+                                    reader.BaseStream.Position -= System.Text.Encoding.UTF8.GetByteCount(fileName) + 4; // +4 for string length
+                                    break;
+                                }
+                                
+                                // Decompress the file in the folder
+                                var fileOutputPath = Path.Combine(folderPath, fileName);
+                                var fileDir = Path.GetDirectoryName(fileOutputPath);
+                                if (!string.IsNullOrEmpty(fileDir))
+                                {
+                                    Directory.CreateDirectory(fileDir);
+                                }
+                                
+                                await DecompressFileAsync(reader, fileOutputPath, cancellationToken);
+                                extractedFiles.Add(fileOutputPath);
+                            }
+                            catch (EndOfStreamException)
+                            {
+                                // End of stream, folder processing complete
+                                break;
+                            }
+                        }
+                        
+                        result.OutputPath = folderPath;
+                        result.Success = true;
+                    }
+                    else
+                    {
+                        result.Success = true;
+                        result.OutputPath = folderPath;
+                    }
                 }
                 else
                 {
@@ -98,7 +144,7 @@ namespace Compression_Vault.Algorithms
                 if (frequencyTableCount > 0)
                 {
                     // Validate frequency table count
-                    if (frequencyTableCount > 256)
+                    if (frequencyTableCount <= 0 || frequencyTableCount > 256)
                     {
                         throw new InvalidDataException("Invalid frequency table count");
                     }
@@ -109,6 +155,13 @@ namespace Compression_Vault.Algorithms
                     {
                         var key = reader.ReadByte();
                         var value = reader.ReadInt32();
+                        
+                        // Validate frequency value
+                        if (value <= 0)
+                        {
+                            throw new InvalidDataException("Invalid frequency value in table");
+                        }
+                        
                         frequencyTable[key] = value;
                     }
 
@@ -129,7 +182,7 @@ namespace Compression_Vault.Algorithms
                     var validBitsInLastByte = reader.ReadByte();
 
                     // Validate valid bits
-                    if (validBitsInLastByte > 8)
+                    if (validBitsInLastByte > 8 || validBitsInLastByte < 0)
                     {
                         throw new InvalidDataException("Invalid bits count in last byte");
                     }
@@ -157,6 +210,25 @@ namespace Compression_Vault.Algorithms
                         throw new EndOfStreamException("Insufficient uncompressed data");
                     }
 
+                    // Read valid bits for uncompressed data (should be 8 for non-empty files, 0 for empty files)
+                    var validBitsInLastByte = reader.ReadByte();
+                    if (validBitsInLastByte != 8 && validBitsInLastByte != 0)
+                    {
+                        throw new InvalidDataException("Invalid valid bits for uncompressed data");
+                    }
+                    
+                    // For empty files, validBitsInLastByte should be 0
+                    if (compressedSize == 0 && validBitsInLastByte != 0)
+                    {
+                        throw new InvalidDataException("Invalid valid bits for empty file");
+                    }
+                    
+                    // For non-empty files, validBitsInLastByte should be 8
+                    if (compressedSize > 0 && validBitsInLastByte != 8)
+                    {
+                        throw new InvalidDataException("Invalid valid bits for non-empty file");
+                    }
+
                     File.WriteAllBytes(outputPath, data);
                 }
             }
@@ -175,6 +247,12 @@ namespace Compression_Vault.Algorithms
         /// </summary>
         private static byte[] DecompressData(ShannonFanoNode root, byte[] compressedData, byte validBitsInLastByte, int originalSize)
         {
+            // Handle empty data case
+            if (originalSize == 0 || compressedData.Length == 0)
+            {
+                return new byte[0];
+            }
+            
             var decompressedData = new List<byte>();
             var currentNode = root;
 
@@ -215,6 +293,55 @@ namespace Compression_Vault.Algorithms
             }
 
             return decompressedData.ToArray();
+        }
+
+        /// <summary>
+        /// Check if the current position is the start of the next item
+        /// </summary>
+        private static bool IsNextItemStart(BinaryReader reader)
+        {
+            try
+            {
+                long currentPosition = reader.BaseStream.Position;
+                
+                // Try to read a string (item name)
+                var itemName = reader.ReadString();
+                
+                // Check if it looks like a valid item name (not empty, reasonable length)
+                if (string.IsNullOrEmpty(itemName) || itemName.Length > 260)
+                {
+                    reader.BaseStream.Position = currentPosition;
+                    return false;
+                }
+                
+                // Try to read the size (should be a reasonable value)
+                var size = reader.ReadInt64();
+                if (size < 0 || size > 1024L * 1024L * 1024L * 1024L) // 1TB max
+                {
+                    reader.BaseStream.Position = currentPosition;
+                    return false;
+                }
+                
+                // Try to read file count
+                var fileCount = reader.ReadInt32();
+                if (fileCount < 0 || fileCount > 100000)
+                {
+                    reader.BaseStream.Position = currentPosition;
+                    return false;
+                }
+                
+                // Try to read is folder flag
+                var isFolder = reader.ReadBoolean();
+                
+                // If we got here, it looks like the start of a new item
+                reader.BaseStream.Position = currentPosition;
+                return true;
+            }
+            catch
+            {
+                // If any exception occurs, it's not the start of a new item
+                return false;
+            }
         }
 
         /// <summary>
