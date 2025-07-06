@@ -146,6 +146,13 @@ namespace Compression_Vault.Algorithms
             // Wait for all file compression tasks to complete
             var compressedFiles = await Task.WhenAll(fileCompressionTasks);
 
+            // Update the ItemName to use relative paths for proper folder structure
+            for (int i = 0; i < files.Length; i++)
+            {
+                var relativePath = GetRelativePath(directoryInfo.FullName, files[i].FullName);
+                compressedFiles[i].ItemName = relativePath;
+            }
+
             return new CompressedItemData
             {
                 ItemName = folder.Name,

@@ -155,14 +155,37 @@ namespace Compression_Vault.Algorithms
         /// </summary>
         private async Task WriteCompressedItemAsync(BinaryWriter writer, CompressedItemData compressedItem, CancellationToken cancellationToken)
         {
-            if (compressedItem.FolderFiles != null)
+            if (compressedItem.FolderFiles != null && compressedItem.FolderFiles.Any())
             {
                 // Write folder marker and process folder files
                 writer.Write(string.Format("FOLDER:{0}", compressedItem.ItemName));
                 foreach (var fileData in compressedItem.FolderFiles)
                 {
+                    // Write the relative path of the file within the folder
                     writer.Write(fileData.ItemName);
-                    await WriteCompressedItemAsync(writer, fileData, cancellationToken);
+                    writer.Write(fileData.OriginalSize);
+                    writer.Write(fileData.CompressedSize);
+
+                    if (fileData.IsCompressed && fileData.FrequencyTable != null)
+                    {
+                        writer.Write(fileData.FrequencyTable.Count);
+                        
+                        // Write frequency table
+                        foreach (var kvp in fileData.FrequencyTable)
+                        {
+                            writer.Write(kvp.Key);
+                            writer.Write(kvp.Value);
+                        }
+
+                        // Write compressed data
+                        writer.Write(fileData.CompressedData);
+                        writer.Write(fileData.ValidBitsInLastByte);
+                    }
+                    else
+                    {
+                        writer.Write(0); // No frequency table
+                        writer.Write(fileData.CompressedData);
+                    }
                 }
             }
             else
